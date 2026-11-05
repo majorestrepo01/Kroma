@@ -240,21 +240,21 @@ if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", us
         unsafe_allow_html=True
     )
 
-    # 3. Envío de la señal MQTT robusta a Wokwi
-    try:
-        import random
-        client_id = f"KromaStreamlit-{random.randint(0, 10000)}"
-        client1 = paho.Client(client_id)
-        client1.on_publish = on_publish
-        client1.connect(broker, port, keepalive=60)
-        client1.loop_start()
-        
-        payload = json.dumps({"r": int(r), "g": int(g), "b": int(b), "brightness": int(brightness)})
-        ret = client1.publish(topic, payload)
-        ret.wait_for_publish()
-        
-        client1.loop_stop()
-        client1.disconnect()
-        st.success(f"🚀 **¡Señal enviada vía MQTT al tópico `{topic}`!** El anillo LED en Wokwi cambió de color dinámicamente.")
-    except Exception as e:
-        st.error(f"Error al enviar MQTT: {e}")
+    # 3. Envío de la señal MQTT a Wokwi (Versión Corregida y Robusta)
+        try:
+            import random
+            client_id = f"StreamlitClient-{random.randint(0, 10000)}"
+            client1 = paho.Client(client_id)
+            client1.on_publish = on_publish
+            client1.connect(broker, port, keepalive=60)
+            client1.loop_start()  # Iniciar bucle en segundo plano
+            
+            payload = json.dumps({"r": int(r), "g": int(g), "b": int(b), "brightness": int(brightness)})
+            ret = client1.publish(topic, payload)
+            ret.wait_for_publish() # Esperar a que el mensaje salga físicamente
+            
+            client1.loop_stop()
+            client1.disconnect()
+            st.success(f"🚀 **¡Señal enviada vía MQTT al tópico `{topic}`!** Wokwi ha actualizado la tira LED.")
+        except Exception as e:
+            st.error(f"Error al enviar MQTT: {e}")

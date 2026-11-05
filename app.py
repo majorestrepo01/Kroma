@@ -184,42 +184,35 @@ st.markdown("---")
 if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", use_container_width=True):
     # Análisis de sentimiento del texto (TextBlob)
     analysis = TextBlob(user_text if user_text else "neutral")
-    polarity = analysis.sentiment.polarity  # Rango de -1.0 (negativo) a 1.0 (positivo)
+    polarity = analysis.sentiment.polarity  # Rango de -1.0 a 1.0
 
     energy_lvl = st.session_state.energy_level if st.session_state.audio_analyzed else "Media"
     rhythm_lvl = st.session_state.rhythm if st.session_state.audio_analyzed else "Moderado"
 
-    # --- MATRIZ DE FUSIÓN MULTIMODAL DINÁMICA (Sin colores estáticos por defecto) ---
-    
-    # 1. Base de Color según el Sentimiento del Texto (Polaridad)
-    # Negativo -> Tonos Fríos/Violetas (-1.0) | Positivo -> Tonos Cálidos/Naranjas/Rojos (1.0)
-    if polarity < -0.1: # Triste / Estresado / Negativo
+    # --- MATRIZ DE FUSIÓN MULTIMODAL DINÁMICA ---
+    if polarity < -0.1:  # Triste / Estresado / Negativo
         base_r, base_g, base_b = 75, 0, 130   # Índigo / Violeta profundo
         mood_text = "Reflexivo / Melancólico"
-    elif polarity > 0.1: # Feliz / Alegre / Positivo
+    elif polarity > 0.1:  # Feliz / Alegre / Positivo
         base_r, base_g, base_b = 255, 128, 0  # Naranja brillante
         mood_text = "Optimista / Alegre"
-    else: # Neutro / Calado
+    else:  # Neutro / Calmado
         base_r, base_g, base_b = 0, 150, 255  # Azul equilibrado
         mood_text = "Neutral / Equilibrado"
 
-    # 2. Modulación Dinámica por Audio (Energía + Ritmo de la Canción)
     if energy_lvl == "Alta" or rhythm_lvl == "Rápido":
-        # Si la canción es enérgica o rápida, subimos el brillo e inclinamos hacia tonos rojo/fucsia
         r = min(255, base_r + 100)
         g = max(0, base_g - 50)
         b = min(255, base_b + 50)
         brightness = 255
-        audio_effect = "Alta Energía / Ritmo Rápido (Dodinámico)"
+        audio_effect = "Alta Energía / Ritmo Rápido"
     elif energy_lvl == "Baja" or rhythm_lvl == "Lento":
-        # Si la canción es calmada o lenta, bajamos la intensidad y profundizamos tonos suaves
         r = int(base_r * 0.6)
         g = int(base_g * 0.6)
         b = int(base_b * 0.8) + 50
         brightness = 90
-        audio_effect = "Baja Energía / Ritmo Lento (Relajado)"
+        audio_effect = "Baja Energía / Ritmo Lento"
     else:
-        # Energía y Ritmo Moderados
         r, g, b = base_r, base_g, base_b
         brightness = 170
         audio_effect = "Energía y Ritmo Moderados"
@@ -240,21 +233,21 @@ if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", us
         unsafe_allow_html=True
     )
 
-    # 3. Envío de la señal MQTT a Wokwi (Versión Corregida y Robusta)
-        try:
-            import random
-            client_id = f"StreamlitClient-{random.randint(0, 10000)}"
-            client1 = paho.Client(client_id)
-            client1.on_publish = on_publish
-            client1.connect(broker, port, keepalive=60)
-            client1.loop_start()  # Iniciar bucle en segundo plano
-            
-            payload = json.dumps({"r": int(r), "g": int(g), "b": int(b), "brightness": int(brightness)})
-            ret = client1.publish(topic, payload)
-            ret.wait_for_publish() # Esperar a que el mensaje salga físicamente
-            
-            client1.loop_stop()
-            client1.disconnect()
-            st.success(f"🚀 **¡Señal enviada vía MQTT al tópico `{topic}`!** Wokwi ha actualizado la tira LED.")
-        except Exception as e:
-            st.error(f"Error al enviar MQTT: {e}")
+    # 3. Envío de la señal MQTT a Wokwi
+    try:
+        import random
+        client_id = f"StreamlitClient-{random.randint(0, 10000)}"
+        client1 = paho.Client(client_id)
+        client1.on_publish = on_publish
+        client1.connect(broker, port, keepalive=60)
+        client1.loop_start()
+        
+        payload = json.dumps({"r": int(r), "g": int(g), "b": int(b), "brightness": int(brightness)})
+        ret = client1.publish(topic, payload)
+        ret.wait_for_publish()
+        
+        client1.loop_stop()
+        client1.disconnect()
+        st.success(f"🚀 **¡Señal enviada vía MQTT al tópico `{topic}`!** Wokwi ha actualizado la tira LED.")
+    except Exception as e:
+        st.error(f"Error al enviar MQTT: {e}")

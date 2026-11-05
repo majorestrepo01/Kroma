@@ -51,16 +51,16 @@ st.markdown("""
 # Título y Banner explicativo
 st.markdown("""
     <div class="header-container">
-        <h1>🎵 Kroma — Estación de Ambiente y Entretenimiento Sensorial</h1>
-        <p>Transforma la atmósfera física de tu habitación combinando tu estado emocional (texto) y el análisis acústico avanzado de la canción (Librosa).</p>
+        <h1>Kroma</h1>
+        <p>Transforma la atmósfera de tu habitación combinando tu estado emocional y la canción que estas escuchando.</p>
     </div>
 """, unsafe_allow_html=True)
 
 st.markdown("""
 ### 🧭 ¿Qué debes hacer?
 1. **Describe tu estado de ánimo:** Escribe en el cuadro de texto cómo te sientes.
-2. **Captura el audio con el micrófono:** Graba un fragmento de la canción que está sonando.
-3. **Analiza y Transforma:** El sistema evaluará el **Tempo (BPM)**, la **Energía (RMS)**, el **Brillo (Spectral Centroid)** y el **ZCR**, calculando el ambiente perfecto para tus luces en Wokwi.
+2. **Captura el audio con el micrófono:** Graba un fragmento de la canción que estas escuchando.
+3. **Analiza y Transforma:** El sistema evaluará tu canción, para calcular el ambiente perfecto para tus habitación.
 """)
 
 st.markdown("---")
@@ -84,15 +84,15 @@ if "rhythm" not in st.session_state:
 col1, col2 = st.columns(2, gap="large")
 
 with col1:
-    st.subheader("📝 1. Análisis de Sentimientos (Texto)")
+    st.subheader("📝 1. Análisis de Sentimientos")
     user_text = st.text_area(
         "¿Cómo te sientes hoy?",
-        placeholder="Ej. Me siento cansado y necesito concentrarme para estudiar...",
+        placeholder="Ej. Me siento cansado, feliz, triste...",
         height=140
     )
 
 with col2:
-    st.subheader("🎙️ 2. Captura de Audio y Análisis Acústico (Librosa)")
+    st.subheader("🎙️ 2. Análisis de música")
     st.write("Haz clic en el micrófono para grabar la canción:")
     
     # Grabador de audio por micrófono directo

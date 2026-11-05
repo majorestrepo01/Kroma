@@ -60,7 +60,7 @@ st.markdown("""
 ### 🧭 ¿Qué debes hacer?
 1. **Describe tu estado de ánimo:** Escribe en el cuadro de texto cómo te sientes.
 2. **Captura el audio con el micrófono:** Graba un fragmento de la canción que estas escuchando.
-3. **Analiza y Transforma:** El sistema evaluará tu canción, para calcular el ambiente perfecto para tus habitación.
+3. **Analiza y Transforma:** El sistema evaluará dinámicamente tu texto y tu canción para calcular el ambiente lumínico perfecto.
 """)
 
 st.markdown("---")
@@ -87,7 +87,7 @@ with col1:
     st.subheader("📝 1. Análisis de Sentimientos")
     user_text = st.text_area(
         "¿Cómo te sientes hoy?",
-        placeholder="Ej. Me siento cansado, feliz, triste...",
+        placeholder="Ej. Me siento muy feliz con ganas de bailar, o triste y cansado...",
         height=140
     )
 
@@ -95,7 +95,6 @@ with col2:
     st.subheader("🎙️ 2. Análisis de música")
     st.write("Haz clic en el micrófono para grabar la canción:")
     
-    # Grabador de audio por micrófono directo
     audio_bytes = audio_recorder(
         text="Haz clic para grabar / parar",
         recording_color="#e84c3d",
@@ -117,42 +116,34 @@ with col2:
                     with open(temp_filename, "wb") as f:
                         f.write(audio_bytes)
                     
-                    # Carga y análisis completo con Librosa
                     y, sr = librosa.load(temp_filename, duration=15)
                     
-                    # 1. Tempo (BPM)
                     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
                     if isinstance(tempo, np.ndarray):
                         tempo = float(tempo[0])
                     else:
                         tempo = float(tempo)
                         
-                    # 2. RMS Energy (Intensidad energética)
                     energy = float(np.mean(librosa.feature.rms(y=y)))
-                    
-                    # 3. Spectral Centroid (Brillo)
                     spec_centroid = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)))
-                    
-                    # 4. Zero Crossing Rate (Complemento de sonido)
                     zero_crossing = float(np.mean(librosa.feature.zero_crossing_rate(y)))
 
-                    # Clasificación de Energía según tus reglas
-                    if energy < 0.05:
+                    # Clasificación de Energía
+                    if energy < 0.04:
                         energy_level = "Baja"
-                    elif energy < 0.12:
+                    elif energy < 0.10:
                         energy_level = "Media"
                     else:
                         energy_level = "Alta"
 
-                    # Clasificación de Ritmo según tus reglas
-                    if tempo < 80:
+                    # Clasificación de Ritmo
+                    if tempo < 90:
                         rhythm = "Lento"
-                    elif tempo < 120:
+                    elif tempo < 130:
                         rhythm = "Moderado"
                     else:
                         rhythm = "Rápido"
 
-                    # Guardar en session_state
                     st.session_state.tempo_bpm = tempo
                     st.session_state.rms_energy = energy
                     st.session_state.spectral_centroid = spec_centroid
@@ -191,74 +182,79 @@ st.markdown("---")
 
 # Botón principal para procesar y enviar la salida física
 if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", use_container_width=True):
-    if not user_text and not st.session_state.audio_analyzed:
-        st.warning("⚠️ Por favor ingresa tu estado de ánimo en texto y graba/analiza la canción con el micrófono.")
+    # Análisis de sentimiento del texto (TextBlob)
+    analysis = TextBlob(user_text if user_text else "neutral")
+    polarity = analysis.sentiment.polarity  # Rango de -1.0 (negativo) a 1.0 (positivo)
+
+    energy_lvl = st.session_state.energy_level if st.session_state.audio_analyzed else "Media"
+    rhythm_lvl = st.session_state.rhythm if st.session_state.audio_analyzed else "Moderado"
+
+    # --- MATRIZ DE FUSIÓN MULTIMODAL DINÁMICA (Sin colores estáticos por defecto) ---
+    
+    # 1. Base de Color según el Sentimiento del Texto (Polaridad)
+    # Negativo -> Tonos Fríos/Violetas (-1.0) | Positivo -> Tonos Cálidos/Naranjas/Rojos (1.0)
+    if polarity < -0.1: # Triste / Estresado / Negativo
+        base_r, base_g, base_b = 75, 0, 130   # Índigo / Violeta profundo
+        mood_text = "Reflexivo / Melancólico"
+    elif polarity > 0.1: # Feliz / Alegre / Positivo
+        base_r, base_g, base_b = 255, 128, 0  # Naranja brillante
+        mood_text = "Optimista / Alegre"
+    else: # Neutro / Calado
+        base_r, base_g, base_b = 0, 150, 255  # Azul equilibrado
+        mood_text = "Neutral / Equilibrado"
+
+    # 2. Modulación Dinámica por Audio (Energía + Ritmo de la Canción)
+    if energy_lvl == "Alta" or rhythm_lvl == "Rápido":
+        # Si la canción es enérgica o rápida, subimos el brillo e inclinamos hacia tonos rojo/fucsia
+        r = min(255, base_r + 100)
+        g = max(0, base_g - 50)
+        b = min(255, base_b + 50)
+        brightness = 255
+        audio_effect = "Alta Energía / Ritmo Rápido (Dodinámico)"
+    elif energy_lvl == "Baja" or rhythm_lvl == "Lento":
+        # Si la canción es calmada o lenta, bajamos la intensidad y profundizamos tonos suaves
+        r = int(base_r * 0.6)
+        g = int(base_g * 0.6)
+        b = int(base_b * 0.8) + 50
+        brightness = 90
+        audio_effect = "Baja Energía / Ritmo Lento (Relajado)"
     else:
-        # 1. Análisis de sentimiento del texto (TextBlob)
-        analysis = TextBlob(user_text if user_text else "neutral")
-        polarity = analysis.sentiment.polarity
+        # Energía y Ritmo Moderados
+        r, g, b = base_r, base_g, base_b
+        brightness = 170
+        audio_effect = "Energía y Ritmo Moderados"
+
+    st.success(f"🎯 **Ambiente Multimodal:** Sentimiento ({mood_text}) + Audio ({audio_effect})")
+
+    # Visualizador en la interfaz web
+    st.markdown(
+        f"""
+        <div style="background-color: rgb({r}, {g}, {b}); 
+                    width: 100%; height: 90px; border-radius: 14px; 
+                    display: flex; align-items: center; justify-content: center; 
+                    color: white; font-weight: bold; font-size: 20px;
+                    box-shadow: 0 6px 20px rgba(0,0,0,0.25); margin-top: 15px;">
+            Iluminación Dinámica Generada: RGB({r}, {g}, {b}) — Brillo: {brightness}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # 3. Envío de la señal MQTT robusta a Wokwi
+    try:
+        import random
+        client_id = f"KromaStreamlit-{random.randint(0, 10000)}"
+        client1 = paho.Client(client_id)
+        client1.on_publish = on_publish
+        client1.connect(broker, port, keepalive=60)
+        client1.loop_start()
         
-        # 2. Aplicación de las reglas de iluminación basadas en Energía + Ritmo (y texto)
-        energy_lvl = st.session_state.energy_level
-        rhythm_lvl = st.session_state.rhythm
-
-        if energy_lvl == "Baja" and rhythm_lvl == "Lento":
-            # Luz azul o violeta, con intensidad baja
-            r, g, b = 138, 43, 226
-            brightness = 90
-            mood_label = "Calma Profunda / Relajación"
-        elif energy_lvl == "Media" and rhythm_lvl == "Moderado":
-            # Luz amarilla o cálida
-            r, g, b = 255, 215, 0
-            brightness = 180
-            mood_label = "Enfoque / Calidez Moderada"
-        elif energy_lvl == "Alta" and rhythm_lvl == "Rápido":
-            # Luz naranja o roja, con intensidad alta
-            r, g, b = 255, 69, 0
-            brightness = 255
-            mood_label = "Energía Alta / Dinamismo"
-        else:
-            # Regla de respaldo o mixta según polaridad del texto
-            if polarity < -0.1:
-                r, g, b = 70, 130, 180
-                brightness = 120
-                mood_label = "Refugio Tranquilo"
-            elif polarity > 0.2:
-                r, g, b = 255, 140, 0
-                brightness = 220
-                mood_label = "Optimismo Activo"
-
-        st.success(f"🎯 **Ambiente Generado:** {mood_label} | **Energía:** {energy_lvl} | **Ritmo:** {rhythm_lvl}")
-
-        # Visualizador en la interfaz web
-        st.markdown(
-            f"""
-            <div style="background-color: rgb({r}, {g}, {b}); 
-                        width: 100%; height: 90px; border-radius: 14px; 
-                        display: flex; align-items: center; justify-content: center; 
-                        color: white; font-weight: bold; font-size: 20px;
-                        box-shadow: 0 6px 20px rgba(0,0,0,0.25); margin-top: 15px;">
-                Iluminación Generada: RGB({r}, {g}, {b}) — Brillo: {brightness}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        # 3. Envío de la señal MQTT a Wokwi (Versión Corregida y Robusta)
-        try:
-            import random
-            client_id = f"StreamlitClient-{random.randint(0, 10000)}"
-            client1 = paho.Client(client_id)
-            client1.on_publish = on_publish
-            client1.connect(broker, port, keepalive=60)
-            client1.loop_start()  # Iniciar bucle en segundo plano
-            
-            payload = json.dumps({"r": int(r), "g": int(g), "b": int(b), "brightness": int(brightness)})
-            ret = client1.publish(topic, payload)
-            ret.wait_for_publish() # Esperar a que el mensaje salga físicamente
-            
-            client1.loop_stop()
-            client1.disconnect()
-            st.success(f"🚀 **¡Señal enviada vía MQTT al tópico `{topic}`!** Wokwi ha actualizado la tira LED.")
-        except Exception as e:
-            st.error(f"Error al enviar MQTT: {e}")
+        payload = json.dumps({"r": int(r), "g": int(g), "b": int(b), "brightness": int(brightness)})
+        ret = client1.publish(topic, payload)
+        ret.wait_for_publish()
+        
+        client1.loop_stop()
+        client1.disconnect()
+        st.success(f"🚀 **¡Señal enviada vía MQTT al tópico `{topic}`!** El anillo LED en Wokwi cambió de color dinámicamente.")
+    except Exception as e:
+        st.error(f"Error al enviar MQTT: {e}")

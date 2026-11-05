@@ -58,9 +58,9 @@ st.markdown("""
 
 st.markdown("""
 ### 🧭 ¿Qué debes hacer?
-1. **Describe tu estado de ánimo:** Escribe en el cuadro de texto cómo te sientes.
+1. **Describe tu estado de ánimo:** Escribe con total libertad cómo te sientes (ej. "estoy súper feliz", "me siento muy triste y apagado").
 2. **Captura el audio con el micrófono:** Graba un fragmento de la canción que estas escuchando.
-3. **Analiza y Transforma:** El sistema evaluará dinámicamente tu texto y tu canción para calcular el ambiente lumínico perfecto.
+3. **Analiza y Transforma:** El sistema evaluará a fondo tu texto y las características acústicas de la canción para crear una iluminación única.
 """)
 
 st.markdown("---")
@@ -87,7 +87,7 @@ with col1:
     st.subheader("📝 1. Análisis de Sentimientos")
     user_text = st.text_area(
         "¿Cómo te sientes hoy?",
-        placeholder="Ej. Me siento muy feliz con ganas de bailar, o triste y cansado...",
+        placeholder="Ej. Me siento súper alegre y con energía, o melancólico y cansado...",
         height=140
     )
 
@@ -128,18 +128,18 @@ with col2:
                     spec_centroid = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)))
                     zero_crossing = float(np.mean(librosa.feature.zero_crossing_rate(y)))
 
-                    # Clasificación de Energía
-                    if energy < 0.04:
+                    # --- ESTÁNDARES MEJORADOS Y MÁS SENSIBLES PARA LIBROSA ---
+                    # Normalizamos o ajustamos los umbrales para evitar que todo caiga en medio
+                    if energy < 0.025:
                         energy_level = "Baja"
-                    elif energy < 0.10:
+                    elif energy < 0.07:
                         energy_level = "Media"
                     else:
                         energy_level = "Alta"
 
-                    # Clasificación de Ritmo
-                    if tempo < 90:
+                    if tempo < 100:
                         rhythm = "Lento"
-                    elif tempo < 130:
+                    elif tempo < 140:
                         rhythm = "Moderado"
                     else:
                         rhythm = "Rápido"
@@ -182,42 +182,56 @@ st.markdown("---")
 
 # Botón principal para procesar y enviar la salida física
 if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", use_container_width=True):
-    # Análisis de sentimiento del texto (TextBlob)
+    # Análisis profundo de sentimiento del texto con TextBlob
     analysis = TextBlob(user_text if user_text else "neutral")
-    polarity = analysis.sentiment.polarity  # Rango de -1.0 a 1.0
+    polarity = analysis.sentiment.polarity  # Va de -1.0 a 1.0
+    subjectivity = analysis.sentiment.subjectivity
+
+    # Forzar una lectura más expresiva si el texto contiene palabras clave emocionales en español
+    text_lower = user_text.lower()
+    if any(w in text_lower for w in ["feliz", "contento", "alegre", "energía", "bien", "genial", "emocionado", "fiesta"]):
+        polarity = max(polarity, 0.5)  # Forzar estado positivo
+    elif any(w in text_lower for w in ["triste", "mal", "cansado", "deprimido", "solo", "apagado", "llorar", "estresado"]):
+        polarity = min(polarity, -0.5) # Forzar estado negativo
 
     energy_lvl = st.session_state.energy_level if st.session_state.audio_analyzed else "Media"
     rhythm_lvl = st.session_state.rhythm if st.session_state.audio_analyzed else "Moderado"
 
-    # --- MATRIZ DE FUSIÓN MULTIMODAL DINÁMICA ---
-    if polarity < -0.1:  # Triste / Estresado / Negativo
-        base_r, base_g, base_b = 75, 0, 130   # Índigo / Violeta profundo
-        mood_text = "Reflexivo / Melancólico"
-    elif polarity > 0.1:  # Feliz / Alegre / Positivo
-        base_r, base_g, base_b = 255, 128, 0  # Naranja brillante
-        mood_text = "Optimista / Alegre"
-    else:  # Neutro / Calmado
-        base_r, base_g, base_b = 0, 150, 255  # Azul equilibrado
-        mood_text = "Neutral / Equilibrado"
+    # --- MATRIZ DE FUSIÓN MULTIMODAL PROFUNDA (Texto + Música) ---
+    
+    # 1. Definir color base estrictamente según cómo se siente la persona (Texto)
+    if polarity < -0.15:  # Triste / Melancólico / Apagado
+        base_r, base_g, base_b = 40, 0, 120   # Azul oscuro / Violeta profundo (Melancolía)
+        mood_text = "Triste / Melancólico"
+    elif polarity > 0.15:  # Feliz / Eufórico / Positivo
+        base_r, base_g, base_b = 255, 100, 0  # Naranja / Fuego (Felicidad y Alegría)
+        mood_text = "Feliz / eufórico"
+    else:  # Neutro
+        base_r, base_g, base_b = 0, 120, 200  # Azul equilibrado
+        mood_text = "Tranquilo / Neutro"
 
+    # 2. Modulación de la intensidad y variaciones según el análisis de la canción (Librosa)
     if energy_lvl == "Alta" or rhythm_lvl == "Rápido":
-        r = min(255, base_r + 100)
-        g = max(0, base_g - 50)
-        b = min(255, base_b + 50)
+        # Canción intensa/rápida: Vuelve el color mucho más brillante e intenso
+        r = min(255, base_r + 120)
+        g = max(0, base_g + 40)
+        b = min(255, base_b + 80)
         brightness = 255
-        audio_effect = "Alta Energía / Ritmo Rápido"
+        audio_effect = f"Canción Enérgica ({st.session_state.tempo_bpm:.1f} BPM, Alta Energía)"
     elif energy_lvl == "Baja" or rhythm_lvl == "Lento":
-        r = int(base_r * 0.6)
-        g = int(base_g * 0.6)
-        b = int(base_b * 0.8) + 50
-        brightness = 90
-        audio_effect = "Baja Energía / Ritmo Lento"
+        # Canción lenta/suave: Atenúa el color y lo vuelve tenue y relajante
+        r = int(base_r * 0.5)
+        g = int(base_g * 0.5)
+        b = int(base_b * 0.7) + 30
+        brightness = 80
+        audio_effect = f"Canción Suave ({st.session_state.tempo_bpm:.1f} BPM, Baja Energía)"
     else:
+        # Moderado
         r, g, b = base_r, base_g, base_b
-        brightness = 170
-        audio_effect = "Energía y Ritmo Moderados"
+        brightness = 160
+        audio_effect = f"Canción Moderada ({st.session_state.tempo_bpm:.1f} BPM)"
 
-    st.success(f"🎯 **Ambiente Multimodal:** Sentimiento ({mood_text}) + Audio ({audio_effect})")
+    st.success(f"🎯 **Ambiente Multimodal:** Sentimiento de la persona [{mood_text}] + Contexto Musical [{audio_effect}]")
 
     # Visualizador en la interfaz web
     st.markdown(

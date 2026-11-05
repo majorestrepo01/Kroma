@@ -52,15 +52,15 @@ st.markdown("""
 st.markdown("""
     <div class="header-container">
         <h1>🎵 Kroma — Estación de Ambiente y Entretenimiento Sensorial</h1>
-        <p>Transforma la atmósfera física de tu habitación combinando tu estado emocional (texto) y el análisis acústico directo de la canción que escuchas (micrófono + Librosa).</p>
+        <p>Transforma la atmósfera física de tu habitación combinando tu estado emocional (texto) y el análisis acústico avanzado de la canción (Librosa).</p>
     </div>
 """, unsafe_allow_html=True)
 
 st.markdown("""
 ### 🧭 ¿Qué debes hacer?
 1. **Describe tu estado de ánimo:** Escribe en el cuadro de texto cómo te sientes.
-2. **Escucha la canción con el micrófono:** Presiona el ícono del micrófono para empezar a grabar la canción que suena en tu habitación. Haz clic nuevamente para detener la grabación.
-3. **Analiza y Transforma:** El sistema procesará las ondas sonoras con **Librosa**, calculará el color/brillo y enviará la orden vía **MQTT** a tus luces LED en Wokwi.
+2. **Captura el audio con el micrófono:** Graba un fragmento de la canción que está sonando.
+3. **Analiza y Transforma:** El sistema evaluará el **Tempo (BPM)**, la **Energía (RMS)**, el **Brillo (Spectral Centroid)** y el **ZCR**, calculando el ambiente perfecto para tus luces en Wokwi.
 """)
 
 st.markdown("---")
@@ -70,8 +70,16 @@ if "audio_analyzed" not in st.session_state:
     st.session_state.audio_analyzed = False
 if "tempo_bpm" not in st.session_state:
     st.session_state.tempo_bpm = 0.0
+if "rms_energy" not in st.session_state:
+    st.session_state.rms_energy = 0.0
 if "spectral_centroid" not in st.session_state:
     st.session_state.spectral_centroid = 0.0
+if "zcr" not in st.session_state:
+    st.session_state.zcr = 0.0
+if "energy_level" not in st.session_state:
+    st.session_state.energy_level = ""
+if "rhythm" not in st.session_state:
+    st.session_state.rhythm = ""
 
 col1, col2 = st.columns(2, gap="large")
 
@@ -84,10 +92,10 @@ with col1:
     )
 
 with col2:
-    st.subheader("🎙️ 2. Captura y Análisis por Micrófono (Librosa)")
-    st.write("Haz clic en el micrófono para empezar a escuchar la canción que suena:")
+    st.subheader("🎙️ 2. Captura de Audio y Análisis Acústico (Librosa)")
+    st.write("Haz clic en el micrófono para grabar la canción:")
     
-    # Grabador de audio por micrófono directo desde la Web
+    # Grabador de audio por micrófono directo
     audio_bytes = audio_recorder(
         text="Haz clic para grabar / parar",
         recording_color="#e84c3d",
@@ -97,92 +105,135 @@ with col2:
     )
 
     if audio_bytes:
-        st.info("🔴 **Micrófono activo / Grabación capturada.** Procesando propiedades acústicas del sonido con Librosa...")
-        
-        # Reproductor del fragmento grabado
+        st.info("🔴 **Micrófono activo / Grabación capturada.** Procesando características acústicas con Librosa...")
         st.audio(audio_bytes, format="audio/wav")
         
-        # Botones para procesar o reiniciar
         col_btn1, col_btn2 = st.columns(2)
         
         with col_btn1:
-            if st.button("⚙️ Analizar Sonido con Librosa"):
+            if st.button("⚙️ Analizar con Librosa"):
                 try:
-                    # Guardar temporalmente los bytes capturados por el micrófono
                     temp_filename = "temp_mic_recording.wav"
                     with open(temp_filename, "wb") as f:
                         f.write(audio_bytes)
                     
-                    # Cargar con Librosa y extraer características del sonido
+                    # Carga y análisis completo con Librosa
                     y, sr = librosa.load(temp_filename, duration=15)
-                    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
                     
+                    # 1. Tempo (BPM)
+                    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
                     if isinstance(tempo, np.ndarray):
                         tempo = float(tempo[0])
                     else:
                         tempo = float(tempo)
                         
-                    spec_centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
+                    # 2. RMS Energy (Intensidad energética)
+                    energy = float(np.mean(librosa.feature.rms(y=y)))
+                    
+                    # 3. Spectral Centroid (Brillo)
+                    spec_centroid = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)))
+                    
+                    # 4. Zero Crossing Rate (Complemento de sonido)
+                    zero_crossing = float(np.mean(librosa.feature.zero_crossing_rate(y)))
 
+                    # Clasificación de Energía según tus reglas
+                    if energy < 0.05:
+                        energy_level = "Baja"
+                    elif energy < 0.12:
+                        energy_level = "Media"
+                    else:
+                        energy_level = "Alta"
+
+                    # Clasificación de Ritmo según tus reglas
+                    if tempo < 80:
+                        rhythm = "Lento"
+                    elif tempo < 120:
+                        rhythm = "Moderado"
+                    else:
+                        rhythm = "Rápido"
+
+                    # Guardar en session_state
                     st.session_state.tempo_bpm = tempo
+                    st.session_state.rms_energy = energy
                     st.session_state.spectral_centroid = spec_centroid
+                    st.session_state.zcr = zero_crossing
+                    st.session_state.energy_level = energy_level
+                    st.session_state.rhythm = rhythm
                     st.session_state.audio_analyzed = True
                     
-                    # Eliminar archivo temporal tras análisis
                     if os.path.exists(temp_filename):
                         os.remove(temp_filename)
                         
                 except Exception as e:
-                    st.error(f"Error al analizar el audio grabado con Librosa: {e}")
+                    st.error(f"Error procesando el audio con Librosa: {e}")
 
         with col_btn2:
             if st.button("🔄 Reiniciar Grabación"):
                 st.session_state.audio_analyzed = False
                 st.session_state.tempo_bpm = 0.0
+                st.session_state.rms_energy = 0.0
                 st.session_state.spectral_centroid = 0.0
+                st.session_state.zcr = 0.0
+                st.session_state.energy_level = ""
+                st.session_state.rhythm = ""
                 st.rerun()
 
         if st.session_state.audio_analyzed:
-            st.success("✅ **¡Canción escuchada y analizada con éxito!** Ya puedes generar tu ambiente.")
-            st.write(f"📊 **Resultados del Sonido:** Ritmo: `{st.session_state.tempo_bpm:.1f} BPM` | Frecuencia Promedio: `{st.session_state.spectral_centroid:.1f} Hz`")
+            st.success("✅ **¡Canción analizada con éxito!**")
+            st.markdown(f"""
+            * **Tempo:** `{st.session_state.tempo_bpm:.1f} BPM` (*Ritmo: {st.session_state.rhythm}*)
+            * **RMS Energy:** `{st.session_state.rms_energy:.3f}` (*Nivel: {st.session_state.energy_level}*)
+            * **Spectral Centroid:** `{st.session_state.spectral_centroid:.1f} Hz`
+            * **Zero Crossing Rate:** `{st.session_state.zcr:.3f}`
+            """)
 
 st.markdown("---")
 
 # Botón principal para procesar y enviar la salida física
 if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", use_container_width=True):
     if not user_text and not st.session_state.audio_analyzed:
-        st.warning("⚠️ Por favor escribe tu estado de ánimo o graba un fragmento de la canción con el micrófono antes de continuar.")
+        st.warning("⚠️ Por favor ingresa tu estado de ánimo en texto y graba/analiza la canción con el micrófono.")
     else:
-        # 1. Análisis de polaridad del texto (TextBlob)
+        # 1. Análisis de sentimiento del texto (TextBlob)
         analysis = TextBlob(user_text if user_text else "neutral")
-        polarity = analysis.sentiment.polarity  # Rango de -1.0 a 1.0
+        polarity = analysis.sentiment.polarity
 
-        # 2. Lógica de combinación multimodal (Texto + Acústica en tiempo real)
-        r, g, b = 0, 206, 209  # Turquesa neutro
+        # Valores por defecto
+        r, g, b = 0, 206, 209
         brightness = 180
-        mood_label = "Balance y Enfoque"
+        mood_label = "Balance y Armonía"
 
-        # Ajuste según el estado anímico
-        if polarity < -0.1:
-            r, g, b = 138, 43, 226  # Purpura/Violeta relajante
-            brightness = 110
-            mood_label = "Calma y Relajación"
-        elif polarity > 0.2:
-            r, g, b = 255, 140, 0   # Naranja dinámico
+        # 2. Aplicación de las reglas de iluminación basadas en Energía + Ritmo (y texto)
+        energy_lvl = st.session_state.energy_level
+        rhythm_lvl = st.session_state.rhythm
+
+        if energy_lvl == "Baja" and rhythm_lvl == "Lento":
+            # Luz azul o violeta, con intensidad baja
+            r, g, b = 138, 43, 226
+            brightness = 90
+            mood_label = "Calma Profunda / Relajación"
+        elif energy_lvl == "Media" and rhythm_lvl == "Moderado":
+            # Luz amarilla o cálida
+            r, g, b = 255, 215, 0
+            brightness = 180
+            mood_label = "Enfoque / Calidez Moderada"
+        elif energy_lvl == "Alta" and rhythm_lvl == "Rápido":
+            # Luz naranja o roja, con intensidad alta
+            r, g, b = 255, 69, 0
             brightness = 255
-            mood_label = "Energía y Vitalidad"
+            mood_label = "Energía Alta / Dinamismo"
+        else:
+            # Regla de respaldo o mixta según polaridad del texto
+            if polarity < -0.1:
+                r, g, b = 70, 130, 180
+                brightness = 120
+                mood_label = "Refugio Tranquilo"
+            elif polarity > 0.2:
+                r, g, b = 255, 140, 0
+                brightness = 220
+                mood_label = "Optimismo Activo"
 
-        # Ajuste según las métricas sonoras calculadas por Librosa
-        if st.session_state.audio_analyzed:
-            bpm = st.session_state.tempo_bpm
-            if bpm > 125:  # Música rápida / festiva / rock
-                r, g, b = 255, 0, 127  # Fucsia vibrante
-                brightness = 255
-            elif bpm < 90 and bpm > 0:  # Música lenta / chill / acústica
-                r, g, b = 70, 130, 180  # Azul suave
-                brightness = 130
-
-        st.success(f"🎯 **Ambiente Calculado:** {mood_label} | **Música (BPM detectados):** {st.session_state.tempo_bpm:.1f} BPM")
+        st.success(f"🎯 **Ambiente Generado:** {mood_label} | **Energía:** {energy_lvl} | **Ritmo:** {rhythm_lvl}")
 
         # Visualizador en la interfaz web
         st.markdown(
@@ -198,7 +249,7 @@ if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", us
             unsafe_allow_html=True
         )
 
-        # 3. Envío de la señal vía MQTT hacia Wokwi
+        # 3. Envío de la señal MQTT a Wokwi
         try:
             client1 = paho.Client("KromaStreamlitClient")
             client1.on_publish = on_publish
@@ -206,6 +257,6 @@ if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", us
             payload = json.dumps({"r": int(r), "g": int(g), "b": int(b), "brightness": int(brightness)})
             client1.publish(topic, payload)
             client1.disconnect()
-            st.success(f"🚀 **¡Señal enviada con éxito vía MQTT al tópico `{topic}`!** Tu simulación en Wokwi reflejará los cambios.")
+            st.success(f"🚀 **¡Señal enviada vía MQTT al tópico `{topic}`!** Wokwi ha actualizado la tira LED.")
         except Exception as e:
-            st.error(f"Error al conectar o publicar en el broker MQTT: {e}")
+            st.error(f"Error al enviar MQTT: {e}")

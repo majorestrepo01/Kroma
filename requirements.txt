@@ -18,3 +18,4 @@ bokeh==2.4.3
 Streamlit-bokeh-events
 librosa
 numpy
+audio-recorder-streamlit

@@ -197,12 +197,7 @@ if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", us
         # 1. Análisis de sentimiento del texto (TextBlob)
         analysis = TextBlob(user_text if user_text else "neutral")
         polarity = analysis.sentiment.polarity
-
-        # Valores por defecto
-        r, g, b = 0, 206, 209
-        brightness = 180
-        mood_label = "Balance y Armonía"
-
+        
         # 2. Aplicación de las reglas de iluminación basadas en Energía + Ritmo (y texto)
         energy_lvl = st.session_state.energy_level
         rhythm_lvl = st.session_state.rhythm

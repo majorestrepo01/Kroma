@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Configuración MQTT (coincidente con tus prácticas anteriores)
+# Configuración MQTT
 broker = "broker.mqttdashboard.com"
 port = 1883
 topic = "kroma/mood/lights"
@@ -22,7 +22,7 @@ topic = "kroma/mood/lights"
 def on_publish(client, userdata, result):
     print("El dato ha sido publicado correctamente.\n")
 
-# Estilos CSS personalizados para el diseño visual
+# Estilos CSS personalizados
 st.markdown("""
     <style>
     .header-container {
@@ -59,10 +59,16 @@ st.markdown("""
 ### 🧭 ¿Qué debes hacer?
 1. **Describe tu estado de ánimo:** Escribe en el cuadro de texto cómo te sientes o qué necesitas en este momento.
 2. **Indica tu música:** Presiona el botón del micrófono y di en voz alta el género musical, artista o la canción que estás escuchando.
-3. **Transforma tu espacio:** Haz clic en el botón inferior para fusionar ambas entradas; el sistema calculará el color y la intensidad ideal y los enviará automáticamente vía **MQTT** a tus luces LED inteligentes en Wokwi.
+3. **Avisa y Transforma:** Una vez que la canción haya finalizado o se haya capturado el contexto, el sistema te avisará para que puedas generar tu ambiente lumínico.
 """)
 
 st.markdown("---")
+
+# Inicializar estados de sesión para control de audio y avisos
+if "music_ready" not in st.session_state:
+    st.session_state.music_ready = False
+if "music_text" not in st.session_state:
+    st.session_state.music_text = ""
 
 # Distribución en dos columnas para las entradas multimodales
 col1, col2 = st.columns(2, gap="large")
@@ -109,42 +115,50 @@ with col2:
         debounce_time=0
     )
 
-    music_text = ""
     if result and "GET_MUSIC_TEXT" in result:
-        music_text = result.get("GET_MUSIC_TEXT").strip()
-        st.info(f"🎶 **Música/Vibra detectada por voz:** \"{music_text}\"")
+        st.session_state.music_text = result.get("GET_MUSIC_TEXT").strip()
+        st.session_state.music_ready = True
+
+    # Mostrar estado de la música detectada
+    if st.session_state.music_ready:
+        st.info(f"🎶 **Música/Vibra detectada:** \"{st.session_state.music_text}\"")
+        
+        # Nueva función interactiva: Aviso de que ya se escuchó la canción y puede proceder
+        st.success("✅ **¡Canción escuchada con éxito!** Ya puedes pasar a generar tu ambiente.")
+        
+        if st.button("🔄 Reiniciar captura de audio"):
+            st.session_state.music_ready = False
+            st.session_state.music_text = ""
+            st.rerun()
 
 st.markdown("---")
 
 # Botón principal para procesar y enviar la salida física
 if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", use_container_width=True):
-    if not user_text and not music_text:
-        st.warning("⚠️ Por favor escribe tu estado de ánimo en el texto o utiliza el micrófono para capturar la música.")
+    if not user_text and not st.session_state.music_text:
+        st.warning("⚠️ Por favor escribe tu estado de ánimo o captura la música con el micrófono antes de continuar.")
     else:
         # 1. Análisis de polaridad del texto usando TextBlob
         analysis = TextBlob(user_text if user_text else "neutral")
         polarity = analysis.sentiment.polarity  # Rango de -1.0 a 1.0
 
         # 2. Lógica de combinación multimodal para definir color RGB e intensidad
-        # Valores por defecto (Enfoque / Neutro)
-        r, g, b = 0, 206, 209  # Turquesa
+        r, g, b = 0, 206, 209  # Turquesa por defecto
         brightness = 180
         mood_label = "Enfoque y Balance"
 
         # Modulación según sentimiento en texto
         if polarity < -0.1:
-            # Estrés / Cansancio -> Tonos violetas/cálidos relajantes
-            r, g, b = 138, 43, 226
+            r, g, b = 138, 43, 226  # Violeta relajante
             brightness = 110
             mood_label = "Calma y Relajación"
         elif polarity > 0.2:
-            # Alegría / Energía -> Tonos dorados / naranjas vivos
-            r, g, b = 255, 140, 0
+            r, g, b = 255, 140, 0   # Naranja dinámico
             brightness = 255
             mood_label = "Energía y Vitalidad"
 
         # Modulación secundaria según lo detectado por voz (música)
-        music_lower = music_text.lower()
+        music_lower = st.session_state.music_text.lower()
         if "rock" in music_lower or "metal" in music_lower or "intenso" in music_lower:
             r, g, b = 255, 0, 0        # Rojo dinámico
         elif "lofi" in music_lower or "chill" in music_lower or "tranquilo" in music_lower or "clásica" in music_lower:
@@ -152,7 +166,7 @@ if st.button("✨ Generar Ambiente y Actualizar Habitación", type="primary", us
         elif "pop" in music_lower or "fiesta" in music_lower or "electrónica" in music_lower:
             r, g, b = 255, 20, 147     # Rosado neón
 
-        st.success(f"🎯 **Ambiente Calculado:** {mood_label} | **Audio/Voz:** {music_text if music_text else 'No especificado'}")
+        st.success(f"🎯 **Ambiente Calculado:** {mood_label} | **Audio/Voz:** {st.session_state.music_text if st.session_state.music_text else 'No especificado'}")
 
         # Visualizador en la interfaz web acorde al ambiente generado
         st.markdown(
